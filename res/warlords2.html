@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warlods</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas" height="500" width="500"></canvas>
+    <script>
+        let ctx = canvas.getContext('2d');
+
+        class Shield {
+            thickness = 10;
+            offset = 175;
+
+            constructor(id, color) {
+                if (id == "NW") {
+                    this.x = 0 + this.offset;
+                    this.y = 0 + this.offset;
+                }
+                else if (id == "NE") {
+                    this.x = canvas.width - this.offset;
+                    this.y = 0 + this.offset;
+                }
+                else if (id == "SE") {
+                    this.x = canvas.width - this.offset;
+                    this.y = canvas.height - this.offset;
+                }
+                else if (id == "SW") {
+                    this.x = 0 + this.offset;
+                    this.y = canvas.height - this.offset;
+                }
+                this.name = id;
+                this.color = color;
+                this.position = this.offset;
+            }
+
+            move(evt) {
+                this.position += evt.movementX;
+                if (this.position > ((this.offset * 2) - this.thickness)) this.position = (this.offset * 2) - this.thickness;
+                else if (this.position < this.thickness) this.position = this.thickness;
+
+                // if (evt.movementX > 0) {
+                //     if (this.y < canvas.height - this.offset) {
+                //         this.y += evt.movementX
+                //     }
+                //     else {
+                //         this.x += evt.movementX;
+                //     }
+                // }
+                // else {
+                //     if (this.x > canvas.width - this.offset) {
+                //         this.x -= evt.movementX;
+                //     }
+                //     else {
+                //         this.y -= evt.movementX;
+                //     }
+                // }
+                // if (this.y < canvas.height) this.y = canvas.height;
+                // if (this.x > canvas.width) this.x = canvas.width;
+                // if (this.x < canvas.width - this.offset) this.x = canvas.width - this.offset;
+                // if (this.y < canvas.height - this.offset) this.y = canvas.height - this.offset;
+            }
+
+            draw() {
+                let xPart, yPart;
+
+                if (this.position < this.offset) {
+                    xPart = this.position;
+                    yPart = this.offset;
+                }
+                else {
+                    xPart = this.offset;
+                    // yPart = this.position - this.offset;
+                    yPart = this.offset - (this.position - this.offset);
+                }
+
+
+                if (this.name == "NW") {
+                    this.x = xPart;
+                    this.y = yPart;
+                    // if (this.position < this.offset) {
+                    //     this.x = this.position;
+                    // }
+                    // else {
+                    //     this.y = this.offset - (this.position - this.offset);
+                    // }
+                }
+                else if (this.name == "NE") {
+                    this.x = canvas.width - xPart;
+                    this.y = yPart;
+                    // if (this.position < this.offset) {
+                    //     this.y = this.position;
+                    // }
+                    // else {
+                    //     this.x = (canvas.width - this.offset) + (this.position - this.offset);
+                    // }
+                }
+                else if (this.name == "SE") {
+                    this.x = canvas.width - xPart;
+                    this.y = canvas.height - yPart;
+                    // if (this.position < this.offset) {
+                    //     this.y = canvas.height - this.position;
+                    // }
+                    // else {
+                    //     this.x = (canvas.width - this.offset) + (this.position - this.offset);
+                    // }
+                }
+                else if (this.name == "SW") {
+                    this.x = xPart;
+                    this.y = canvas.height - yPart;
+                    // if (this.position < this.offset) {
+                    //     this.y = canvas.height - this.position;
+                    // }
+                    // else {
+                    //     this.x = (canvas.width - this.offset) + (this.position - this.offset);
+                    // }
+                }
+
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x - this.thickness, this.y - this.thickness, this.thickness * 2, this.thickness * 2);
+            }
+        }
+
+        const all_shields = [
+            new Shield("NW", "green"),
+            new Shield("NE", "blue"),
+            new Shield("SE", "red"),
+            new Shield("SW", "yellow"),
+        ];
+
+        function init() {
+            draw();
+        }
+        init();
+
+        function draw() {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            all_shields.forEach(shield => shield.draw());
+
+            requestAnimationFrame(draw);
+        }
+
+        addEventListener('mousemove', evt => {
+            all_shields.forEach(shield => shield.move(evt));
+        })
+
+    </script>
+</body>
+
+</html>

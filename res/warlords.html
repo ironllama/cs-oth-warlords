@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<style>
+    body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+</style>
+
+<body>
+    <canvas id="canvas" width="800" height="800"></canvas>
+    <script>
+        const BALLSPEED = 10;
+
+        let ctx = canvas.getContext('2d');
+
+        function throttle(func, limit) {
+            let lastFunc;
+            let lastRan;
+            return function () {
+                const context = this;
+                const args = arguments;
+                if (!lastRan) {
+                    func.apply(context, args);
+                    lastRan = Date.now();
+                } else {
+                    clearTimeout(lastFunc);
+                    lastFunc = setTimeout(function () {
+                        if (Date.now() - lastRan >= limit) {
+                            func.apply(context, args);
+                            lastRan = Date.now();
+                        }
+                    }, limit - (Date.now() - lastRan));
+                }
+            }
+        }
+
+        function drawArc(obj, start, end) {
+            ctx.beginPath();
+            ctx.arc(obj.x, obj.y, obj.radius, Math.PI * start, Math.PI * end);
+            ctx.arc(obj.x, obj.y, obj.radius + obj.thickness, Math.PI * end, Math.PI * start, true);
+            ctx.closePath();
+            ctx.fillStyle = obj.color;
+            ctx.fill();
+            ctx.strokeStyle = obj.color;
+            ctx.stroke();
+        }
+
+        class Walls {
+
+        }
+
+        class Shield {
+            radius = 300;
+            thickness = 10;
+            halfwidth = 1 / 24;
+
+            constructor(name, color) {
+                if (name === 'NW') {
+                    this.x = 0;
+                    this.y = 0;
+                    this.startAngle = 0;
+                    this.endAngle = 0.5;
+                }
+                else if (name === 'NE') {
+                    this.x = canvas.width;
+                    this.y = 0;
+                    this.startAngle = 0.5;
+                    this.endAngle = 1;
+                }
+                else if (name === 'SW') {
+                    this.x = 0;
+                    this.y = canvas.height;
+                    this.startAngle = 1.5;
+                    this.endAngle = 2;
+                }
+                else {
+                    this.x = canvas.width;
+                    this.y = canvas.height;
+                    this.startAngle = 1;
+                    this.endAngle = 1.5;
+                }
+
+                this.id = name;
+                this.color = color;
+                this.setCurrAngle(this.startAngle + ((this.endAngle - this.startAngle) / 2));
+            }
+
+            draw() {
+                // this.currStartAngle = this.startAngle;
+                // this.currEndAngle = this.endAngle;
+
+                // let start = Math.max(this.currAngle - this.halfwidth, this.startAngle);
+                // let end = Math.min(this.currAngle + this.halfwidth, this.endAngle);
+
+                // console.log("START:", start, "END:", end, "CURR:", this.currAngle, "S:", this.startAngle, "E:", this.endAngle, "HW:", this.halfwidth, "C:", this.color);
+
+                drawArc(this, this.currStartAngle, this.currEndAngle);
+            }
+
+            move(evt) {
+                // console.log("MOVE: ", evt.movementX);
+                this.setCurrAngle(this.currAngle + (evt.movementX / 1000));
+
+            }
+
+            setCurrAngle(newAngle) {
+                this.currAngle = newAngle;
+                // Greater than the starting...
+                this.currAngle = Math.max(this.currAngle, this.startAngle + this.halfwidth);
+                // But less than the end...
+                this.currAngle = Math.min(this.currAngle, this.endAngle - this.halfwidth);
+
+                // Could be in draw where it is used, but left here for less calculation when not needed.
+                this.currStartAngle = Math.max(this.currAngle - this.halfwidth, this.startAngle);
+                this.currEndAngle = Math.min(this.currAngle + this.halfwidth, this.endAngle);
+            }
+
+            checkCollisionShield(ball) {
+                // See: https://stackoverflow.com/questions/36663160/collision--detection-of-a-ball-with-an-arc
+                // See: https://spicyyoghurt.com/tutorials/html5-javascript-game-development/collision-detection-physics
+                // See: https://stackoverflow.com/questions/45910915/circle-to-circle-collision-response-not-working-as-expected
+                // See: https://ericleong.me/research/circle-circle/#static-circle-collision
+
+                // Distance between the two circles -- Pythagorean, but rid of sqrt by squaring both sides.
+                // Not sure if it's faster to square the radii or squrt the squareDistance? Gonna try comparing squares.
+                // let squareDistance = (this.x - ball.x) * (this.x - ball.x) + (this.y - ball.y) * (this.y - ball.y);
+                // let collision = squareDistance <= ((this.radius + ball.radius) * (this.radius + ball.radius));
+
+                // let vCollision = { x: this.x - ball.x, y: this.y - ball.y };
+                let vCollision = { x: ball.x - this.x, y: ball.y - this.y };
+                let squareDistance = (vCollision.x) * (vCollision.x) + (vCollision.y) * (vCollision.y);
+                let radii = this.radius + this.thickness + ball.radius + ball.thickness;
+                let squareRadii = (radii * radii);
+
+                if (squareDistance <= squareRadii) {
+                    let distance = Math.round(Math.sqrt(squareDistance));
+
+                    let dirOfContact = Math.atan2(vCollision.y, vCollision.x);
+                    if (dirOfContact < 0) dirOfContact += 2 * Math.PI;  // Adjust for weird radians of Math.atan2()
+
+                    // Adjust for arcs hitting arcs or large circles colliding.
+                    // let tan_angle = Math.asin((ball.radius + ball.thickness) / distance);
+                    // let dir1 = dirOfContact + tan_angle;
+                    // let dir2 = dirOfContact - tan_angle;
+                    // let dir1 = (dirOfContact + (Math.PI * this.halfwidth)) / Math.PI;
+                    // let dir2 = (dirOfContact - (Math.PI * this.halfwidth)) / Math.PI;
+                    // let dir1 = dirOfContact / Math.PI;
+                    // let dir2 = dirOfContact / Math.PI;
+                    // console.log("[", this.id, "]: dir1:", dir1, "dir2:", dir2, "start:", this.currStartAngle, "end:", this.currEndAngle);
+
+                    // Convert the rads into fractions of pi.
+                    dirOfContact /= Math.PI
+
+                    // if ((dir1 > this.currStartAngle && dir1 < this.currEndAngle) || (dir2 > this.currStartAngle && dir2 < this.currEndAngle)) {  // Assuming large circles colliding.
+                    if ((distance <= radii && distance >= (this.radius - (ball.radius + ball.thickness)))  // Outside shield && Inside shield
+                        && (dirOfContact > this.currStartAngle && dirOfContact < this.currEndAngle)) {  // Within arc of shield
+                        let vCollisionNorm = { x: vCollision.x / distance, y: vCollision.y / distance };
+                        // ball.dx = 2 * vCollisionNorm.x;
+                        // ball.dy = 2 * vCollisionNorm.y;
+
+                        // Move away from each other so they do not overlap and interact in the next animation frame.
+                        // if (distance <= radii) {
+                        //     ball.x = this.x + vCollisionNorm.x * radii;
+                        //     ball.y = this.y + vCollisionNorm.y * radii;
+                        // }
+                        // else {
+                        //     ball.x = this.x - vCollisionNorm.x * radii;
+                        //     ball.y = this.y - vCollisionNorm.y * radii;
+                        // }
+
+                        // Account for speed.
+                        let vRelativeVelocity = { x: ball.dx - 0, y: ball.dy - 0 };
+                        let speed = vRelativeVelocity.x * vCollisionNorm.x + vRelativeVelocity.y * vCollisionNorm.y;
+                        console.log("SPEED:", speed, "NORM:", vCollisionNorm);
+                        ball.dx = -(speed * vCollisionNorm.x);
+                        // ball.dx = (ball.dx - speed) * (vCollisionNorm.x - speed);
+                        ball.dy = -(speed * vCollisionNorm.y);
+                        // ball.dy = (ball.dy - speed) * (vCollisionNorm.y - speed);
+                    }
+
+                    // let vRelativeVelocity = { x: this.dx - ball.dx, y: this.dy - ball.dy };
+                    // let vRelativeVelocity = { x: -ball.dx, y: -ball.dy };
+                    // let speed = vRelativeVelocity.x * vCollisionNorm.x + vRelativeVelocity.y * vCollisionNorm.y;
+
+                    // ball.dx -= (speed * vCollisionNorm.x);
+                    // ball.dy -= (speed * vCollisionNorm.y);
+                }
+            }
+        }
+
+        class Ball {
+            radius = 0;
+            thickness = 5;
+
+            constructor(color) {
+                this.x = canvas.width / 2;
+                // this.x = canvas.width - 100;
+                this.y = canvas.height / 2;
+                // this.y = canvas.height - 1;
+
+                this.dx = Math.ceil(Math.random() * BALLSPEED);
+                this.dy = Math.ceil(Math.random() * BALLSPEED);
+                // this.dx = 1;
+                // this.dy = 1;
+
+                this.color = color;
+            }
+
+            move() {
+                this.x += this.dx;
+                this.y += this.dy;
+                this.checkCollisionBoundary();
+            }
+
+            draw() {
+                drawArc(this, 0, 2);
+            }
+
+            checkCollisionBoundary() {
+                if ((this.x - this.thickness) <= 0 || (this.x + this.thickness) >= canvas.width) this.dx *= -1;
+                if ((this.y - this.thickness) <= 0 || (this.y + this.thickness) >= canvas.height) this.dy *= -1;
+            }
+        }
+
+
+        const all_shields = [new Shield('NW', 'green'), new Shield('NE', 'blue'), new Shield('SW', 'yellow'), new Shield('SE', 'red')];
+
+        let ball = new Ball('cyan');
+
+        function draw() {
+            ball.move();
+            all_shields.forEach(shield => shield.checkCollisionShield(ball));
+
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ball.draw();
+            all_shields.forEach(shield => shield.draw());
+
+            requestAnimationFrame(draw);
+        }
+        draw();
+
+        addEventListener('mousemove', evt => {
+            all_shields.forEach(shield => shield.move(evt));
+        });
+
+    </script>
+</body>
+
+</html>
