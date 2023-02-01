@@ -36,6 +36,27 @@
         let ctx = canvas.getContext('2d');
         let p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y = 0;  // For debug of collision, bounce.
 
+        function throttle(func, limit) {
+            let lastFunc;
+            let lastRan;
+            return function () {
+                const context = this;
+                const args = arguments;
+                if (!lastRan) {
+                    func.apply(context, args);
+                    lastRan = Date.now();
+                } else {
+                    clearTimeout(lastFunc);
+                    lastFunc = setTimeout(function () {
+                        if (Date.now() - lastRan >= limit) {
+                            func.apply(context, args);
+                            lastRan = Date.now();
+                        }
+                    }, limit - (Date.now() - lastRan));
+                }
+            }
+        }
+
         // See: https://stackoverflow.com/questions/115426/algorithm-to-detect-intersection-of-two-rectangles
         // function edgeTest(p1, p2, p3, r2) {
         //     var rot = [-(p2[1] - p1[1]),
@@ -226,7 +247,6 @@
                 this.name = id;
                 this.color = color;
                 this.position = this.offset;
-                this.alive = true;
             }
 
             move(evt) {

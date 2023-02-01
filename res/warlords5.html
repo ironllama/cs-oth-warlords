@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warlads</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Silkscreen&display=swap');
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Silkscreen', cursive;
+        }
+
+        .overlay {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.7);
+            height: 500px;
+            width: 500px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            display: none;
+        }
+
+        .dialog {
+            box-shadow: inset 0 -3em 3em rgba(0, 0, 0, 0.9), 0 0 0 4px rgb(255, 255, 255), 0 0 2em rgba(255, 255, 255, 0.7);
+            border-radius: 5px;
+            color: white;
+            text-align: center;
+        }
+
+        #nameInput {
+            padding: 5px;
+        }
+
+        #readyButton {
+            position: absolute;
+            background-color: firebrick;
+            color: antiquewhite;
+            font-size: 1.5em;
+            border-radius: 10px;
+            border: none;
+            outline: none;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <button id="readyButton">READY</button>
+    <div id="overlay" class="overlay">
+        <div class="dialog">
+            <div class="dialogPrompt">Name: </div>
+            <input id="nameInput" type="text">
+        </div>
+    </div>
+    <canvas id="canvas" height="500" width="500"></canvas>
+    <script>
+        let ctx = canvas.getContext('2d');
+        let p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y = 0;
+
+        // Line intercept math by Paul Bourke http://paulbourke.net/geometry/pointlineplane/
+        // Determine the intersection point of two line segments
+        // Return FALSE if the lines don't intersect
+        // function intersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+        //     // Check if none of the lines are of length 0
+        //     if ((x1 === x2 && y1 === y2) || (x3 === x4 && y3 === y4)) { return false }
+
+        //     denominator = ((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1))
+
+        //     // Lines are parallel
+        //     if (denominator === 0) { return false }
+
+        //     let ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denominator
+        //     let ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denominator
+
+        //     // is the intersection along the segments
+        //     if (ua < 0 || ua > 1 || ub < 0 || ub > 1) { return false }
+
+        //     // Return a object with the x and y coordinates of the intersection
+        //     let x = x1 + ua * (x2 - x1)
+        //     let y = y1 + ua * (y2 - y1)
+
+        //     return { x, y }
+        // }
+
+        const playerColors = ['green', 'blue', 'red', 'goldenrod'];
+        const playerPos = ['NW', 'SE', 'NE', 'SW'];
+
+        class Player {
+            constructor(id, idx, name) {
+                this.id = id;
+                this.idx = idx;
+
+                this.pos = playerPos[idx];
+                this.color = playerColors[idx];
+
+                this.shield = new Square(this.pos, this.color, SquareType.SHIELD);
+                this.king = new Square(this.pos, this.color, SquareType.KING);
+
+                this.alive = true;
+
+                this.setName(name);
+            }
+
+            move(evt) {
+                if (this.alive) this.shield.move(evt);
+            }
+
+            draw() {
+                if (this.alive) {
+                    this.shield.draw();
+                    this.king.draw();
+                }
+            }
+
+            // checkCollisionBall(ball) {
+            //     if (this.alive) {
+            //         this.shield.checkCollisionBall(ball);
+            //         let hitKing = this.king.checkCollisionBall(ball);
+            //         if (hitKing) this.alive = false;
+            //     }
+            // }
+
+            setName(name) {
+                this.king.name = name;
+            }
+        }
+
+        const SquareType = {
+            SHIELD: 0,
+            WALL: 1,
+            KING: 2,
+        }
+        class Square {
+            allThickness = [10, 15, 20];
+            allOffsets = [175, 150, 50];
+
+            constructor(pos, color, type = SquareType.SHIELD) {
+                this.type = type;
+                this.offset = this.allOffsets[this.type];
+                this.thickness = this.allThickness[this.type];
+                this.name = "????";
+
+                if (pos == "NW") {
+                    this.x = 0 + this.offset;
+                    this.y = 0 + this.offset;
+                }
+                else if (pos == "NE") {
+                    this.x = canvas.wposth - this.offset;
+                    this.y = 0 + this.offset;
+                }
+                else if (pos == "SE") {
+                    this.x = canvas.wposth - this.offset;
+                    this.y = canvas.height - this.offset;
+                }
+                else if (pos == "SW") {
+                    this.x = 0 + this.offset;
+                    this.y = canvas.height - this.offset;
+                }
+                this.pos = pos;
+                this.color = color;
+                this.position = this.offset;
+
+                if (this.type === SquareType.KING) {
+                    this.kingPath = new Path2D();
+                    this.kingPath.rect(this.x - this.thickness, this.y - this.thickness, this.thickness * 2, this.thickness * 2);
+                }
+            }
+
+            move(evt) {
+                this.position += evt.movementX;
+                if (this.position > ((this.offset * 2) - this.thickness)) this.position = (this.offset * 2) - this.thickness;
+                else if (this.position < this.thickness) this.position = this.thickness;
+            }
+
+            draw() {
+                let xPart, yPart;
+
+                if (this.position < this.offset) {
+                    xPart = this.position;
+                    yPart = this.offset;
+                }
+                else {
+                    xPart = this.offset;
+                    yPart = this.offset - (this.position - this.offset);
+                }
+
+                if (this.pos == "NW") {
+                    this.x = xPart;
+                    this.y = yPart;
+
+                    // Reverse the corner's movements.
+                    // this.x = yPart;
+                    // this.y = xPart;
+                }
+                else if (this.pos == "NE") {
+                    // this.x = canvas.width - xPart;
+                    // this.y = yPart;
+
+                    // Reverse the corner's movements.
+                    this.y = canvas.width - xPart;
+                    this.x = yPart;
+                }
+                else if (this.pos == "SE") {
+                    this.x = canvas.width - xPart;
+                    this.y = canvas.height - yPart;
+
+                    // Reverse the corner's movements.
+                    // this.x = canvas.width - yPart;
+                    // this.y = canvas.height - xPart;
+                }
+                else if (this.pos == "SW") {
+                    // this.x = xPart;
+                    // this.y = canvas.height - yPart;
+
+                    // Reverse the corner's movements.
+                    this.y = xPart;
+                    this.x = canvas.height - yPart;
+                }
+
+                let block = new Path2D();
+                block.rect(this.x - this.thickness, this.y - this.thickness, this.thickness * 2, this.thickness * 2)
+                ctx.fillStyle = this.color;
+                // ctx.fillRect(this.x - this.thickness, this.y - this.thickness, this.thickness * 2, this.thickness * 2);
+                ctx.fill(block);
+
+                if (this.type === SquareType.KING) {
+                    this.kingPath = block;
+                    ctx.fillStyle = 'white';
+                    ctx.textAlign = "center";
+                    ctx.font = "bold 10pt sans-serif"
+                    ctx.fillText(this.name, this.x, this.y + 5);
+                }
+            }
+
+            // checkIntersectionBall(ball, x3, y3, x4, y4) {
+            //     // See above for details on intersect().
+            //     // console.log("BALL:", ball, x3, y3, x4, y4);
+            //     let result = intersect(ball.prevX, ball.prevY, ball.x, ball.y, x3, y3, x4, y4);
+            //     // console.log("INTERSECT: ", result);
+
+            //     // For debug outlines in the global draw();
+            //     // p1x = ball.prevX;
+            //     // p1y = ball.prevY;
+            //     // p2x = ball.x;
+            //     // p2y = ball.y;
+            //     // p3x = x3;
+            //     // p3y = y3;
+            //     // p4x = x4;
+            //     // p4y = y4;
+
+            //     return result;
+            // }
+
+            // checkCollisionBall(ball) {
+            //     if (!(
+            //         ball.x > this.x + this.thickness + ball.thickness
+            //         || ball.y > this.y + this.thickness + ball.thickness
+            //         || this.x > ball.x + this.thickness + ball.thickness
+            //         || this.y > ball.y + this.thickness + ball.thickness
+            //     )) {
+            //         // console.log("COLLISION");
+
+            //         let p = false;
+            //         if (ball.prevY < this.y) {  // TOP
+            //             // Check for intersecting vectors. Added ball thickness to all of these for the edge cases (literally)
+            //             // when there is a collision, but the vectors don't actually intersect at the box edge.
+            //             p = this.checkIntersectionBall(
+            //                 ball,
+            //                 this.x - this.thickness - ball.thickness, this.y - this.thickness - ball.thickness,
+            //                 this.x + this.thickness + ball.thickness, this.y - this.thickness - ball.thickness
+            //             );
+
+            //             if (p) {
+            //                 // console.log("HIT - TOP");
+            //                 ball.setSpeed(ball.dx, ball.dy * -1);
+            //             }
+            //         }
+            //         else {
+            //             p = this.checkIntersectionBall(
+            //                 ball,
+            //                 this.x - this.thickness - ball.thickness, this.y + this.thickness + ball.thickness,
+            //                 this.x + this.thickness + ball.thickness, this.y + this.thickness + ball.thickness
+            //             );
+
+            //             if (p) {
+            //                 // console.log("HIT - BOTTOM");
+            //                 ball.setSpeed(ball.dx, ball.dy * -1);
+            //             }
+            //         }
+            //         if (!p) {
+            //             if (ball.prevX > this.x) {  // RIGHT
+            //                 p = this.checkIntersectionBall(
+            //                     ball,
+            //                     this.x + this.thickness + ball.thickness, this.y - this.thickness - ball.thickness,
+            //                     this.x + this.thickness + ball.thickness, this.y + this.thickness + ball.thickness
+            //                 );
+
+            //                 if (p) {
+            //                     // console.log("HIT - RIGHT");
+            //                     ball.setSpeed(ball.dx * -1, ball.dy);
+            //                 }
+            //             }
+            //             else {
+            //                 p = this.checkIntersectionBall(  // LEFT
+            //                     ball,
+            //                     this.x - this.thickness - ball.thickness, this.y - this.thickness - ball.thickness,
+            //                     this.x - this.thickness - ball.thickness, this.y + this.thickness + ball.thickness
+            //                 );
+
+            //                 if (p) {
+            //                     // console.log("HIT - LEFT");
+            //                     ball.setSpeed(ball.dx * -1, ball.dy);
+            //                 }
+            //             }
+            //         }
+
+            //         if (p) {
+            //             // console.log("ADJUSTED BALL");
+            //             ball.move();
+            //             return true;
+            //         }
+
+            //         return false;
+            //     }
+            // }
+        }
+        // let allPlayers = [
+        //     new Player("NW", "green"),
+        //     new Player("NE", "blue"),
+        //     new Player("SE", "red"),
+        //     new Player("SW", "goldenrod"),
+        // ];
+        // currPlayer = allPlayers[2];
+        let allPlayers = [];
+
+        class Ball {
+            radius = 0;
+            thickness = 5;
+
+            constructor(color) {
+                this.x = canvas.width / 2;
+                this.y = canvas.height / 2;
+
+                this.prevX = this.x;
+                this.prevY = this.y;
+
+                this.setSpeed(2, 3);
+
+                this.color = color;
+            }
+
+            setSpeed(dx, dy) {
+                this.dx = dx;
+                this.dy = dy;
+
+                // Speed limits.
+                if (this.dx > this.thickness) this.dx = this.thickness;
+                if (this.dx < -this.thickness) this.dx = -this.thickness;
+
+                if (this.dy > this.thickness) this.dy = this.thickness;
+                if (this.dy < -this.thickness) this.dy = -this.thickness;
+            }
+
+            // move() {
+            //     this.prevX = this.x;
+            //     this.prevY = this.y;
+
+            //     this.x += this.dx;
+            //     this.y += this.dy;
+
+            //     this.checkCollisionBoundary();
+            // }
+
+            draw() {
+                ctx.beginPath();
+                ctx.fillStyle = this.color;
+                ctx.arc(this.x, this.y, this.thickness, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+
+            // checkCollisionBoundary() {
+            //     // If it hits the left or right wall.
+            //     if ((this.x - this.thickness) <= 0 || (this.x + this.thickness) >= canvas.width) this.setSpeed(this.dx * -1, this.dy);
+
+            //     // If it hits the top or bottom wall.
+            //     if ((this.y - this.thickness) <= 0 || (this.y + this.thickness) >= canvas.height) this.setSpeed(this.dx, this.dy * -1);
+            // }
+        }
+        const ball = new Ball('white');
+
+
+        function init() {
+            draw();
+        }
+        init();
+
+        function draw() {
+            // Move and then draw.
+            // ball.move();
+            // allPlayers.forEach(player => player.checkCollisionBall(ball));
+
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ball.draw();
+            if (allPlayers.length > 0) allPlayers.forEach(player => player.draw());
+
+            // Debug for collisions.
+            // ctx.beginPath();
+            // ctx.lineWidth = 3;
+            // ctx.strokeStyle = 'magenta';
+            // ctx.moveTo(p1x, p1y);
+            // ctx.lineTo(p2x, p2y);
+            // ctx.stroke();
+            // ctx.moveTo(p3x, p3y);
+            // ctx.lineTo(p4x, p4y);
+            // ctx.stroke();
+
+            // allPlayers = allPlayers.filter(player => player.alive);
+            // if (allPlayers.length === 1) {
+            //     console.log("GAME OVER!");
+            // }
+            // else {
+            requestAnimationFrame(draw);
+            // }
+        }
+
+        window.onmousemove = function (evt) {
+            // allPlayers.forEach(player => player.move(evt));
+            // console.log("CURRENT:", currPlayer);
+            currPlayer.move(evt);
+            ws.sendMessage({ type: 'MOVE', pos: currPlayer.shield.position });
+        };
+
+        canvas.onmousedown = function (evt) {
+            let playerClicked = false;
+            if (currPlayer.alive) playerClicked = ctx.isPointInPath(currPlayer.king.kingPath, evt.offsetX, evt.offsetY);
+            if (playerClicked) {
+                overlay.style.display = "flex";
+                setTimeout(() => nameInput.focus(), 1);  // Hacky workaround.
+            }
+        };
+
+        overlay.onmousedown = function (evt) {
+            overlay.style.display = "none";
+        };
+
+        overlay.onkeypress = function (evt) {
+            if (evt.key === 'Enter') {
+                // currPlayer.king.name = nameInput.value;
+                ws.sendMessage({ type: 'NAME', name: nameInput.value });
+                overlay.style.display = "none";
+            }
+        };
+
+        nameInput.onmousedown = function (evt) {
+            evt.stopPropagation();  // Keep the input open when clicking on it.
+        }
+
+        readyButton.onclick = function () {
+            console.log("SENDING READY");
+            ws.sendMessage({ type: 'READY' });
+            readyButton.style.backgroundColor = "limegreen";
+        }
+
+        let currPlayerId = "";
+        let currPlayer = null;
+
+        let ws = null;
+        function wsConnect() {
+            ws = new WebSocket("ws://localhost:8333");
+            // ws = new WebSocket("ws://192.168.2.106:8333");
+            // ws = new WebSocket("ws://192.168.3.104:8333");
+            ws.onopen = function () {
+                console.log("WS is open!");
+                ws.sendMessage({ type: 'MATCH' });
+            }
+            ws.onclose = function () {
+                console.log("WS is closed!");
+                sysMessage.innerHTML = "No connection. Please refresh page to try again.";
+            }
+            ws.onmessage = function (inMessage) {
+                console.log("INCOMING: ", inMessage.data);
+                let message = JSON.parse(inMessage.data);
+
+                if (message.type === 'ID') {
+                    currPlayerId = message.id;
+                }
+                else if (message.type === 'MATCH') {
+                    // All the names.
+                    message.players.forEach(player => {
+                        let newPlayer = new Player(player.id, player.idx, player.name);
+                        allPlayers.push(newPlayer);
+                        if (player.id === currPlayerId) currPlayer = newPlayer;
+                    })
+                }
+                else if (message.type === 'START') {
+                    // next();
+                }
+                else if (message.type === 'MOVE') {
+                    for (let player of allPlayers) {
+                        if (player.id === message.id) {
+                            player.shield.position = message.pos;
+                        }
+                    }
+                }
+            }
+
+            ws.sendMessage = function (inMessage) {
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify(inMessage));
+                }
+            }
+        }
+        wsConnect();
+
+        function readyToPlay() {
+
+        }
+
+    </script>
+</body>
+
+</html>
