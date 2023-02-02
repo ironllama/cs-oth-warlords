@@ -44,7 +44,7 @@
             let x = x1 + ua * (x2 - x1)
             let y = y1 + ua * (y2 - y1)
 
-            return {x, y}
+            return { x, y }
         }
 
 
@@ -85,28 +85,28 @@
             allThickness = [10, 15, 20];
             allOffsets = [175, 150, 50];
 
-            constructor(id, color, type = SquareType.SHIELD) {
+            constructor(pos, color, type = SquareType.SHIELD) {
                 this.type = type;
                 this.offset = this.allOffsets[this.type];
                 this.thickness = this.allThickness[this.type];
 
-                if (id == "NW") {
+                if (pos == "NW") {
                     this.x = 0 + this.offset;
                     this.y = 0 + this.offset;
                 }
-                else if (id == "NE") {
-                    this.x = canvas.width - this.offset;
+                else if (pos == "NE") {
+                    this.x = canvas.wposth - this.offset;
                     this.y = 0 + this.offset;
                 }
-                else if (id == "SE") {
-                    this.x = canvas.width - this.offset;
+                else if (pos == "SE") {
+                    this.x = canvas.wposth - this.offset;
                     this.y = canvas.height - this.offset;
                 }
-                else if (id == "SW") {
+                else if (pos == "SW") {
                     this.x = 0 + this.offset;
                     this.y = canvas.height - this.offset;
                 }
-                this.name = id;
+                this.pos = pos;
                 this.color = color;
                 this.position = this.offset;
             }
@@ -129,23 +129,23 @@
                     yPart = this.offset - (this.position - this.offset);
                 }
 
-                if (this.name == "NW") {
+                if (this.pos == "NW") {
                     // this.x = xPart;
                     // this.y = yPart;
                     this.x = yPart;
                     this.y = xPart;
                 }
-                else if (this.name == "NE") {
+                else if (this.pos == "NE") {
                     this.x = canvas.width - xPart;
                     this.y = yPart;
                 }
-                else if (this.name == "SE") {
+                else if (this.pos == "SE") {
                     // this.x = canvas.width - xPart;
                     // this.y = canvas.height - yPart;
                     this.x = canvas.width - yPart;
                     this.y = canvas.height - xPart;
                 }
-                else if (this.name == "SW") {
+                else if (this.pos == "SW") {
                     this.x = xPart;
                     this.y = canvas.height - yPart;
                 }
@@ -174,7 +174,7 @@
             }
 
             checkCollisionBall(ball) {
-                if(!(
+                if (!(
                     ball.x > this.x + this.thickness + ball.thickness
                     || ball.y > this.y + this.thickness + ball.thickness
                     || this.x > ball.x + this.thickness + ball.thickness
@@ -236,7 +236,7 @@
                         }
                     }
 
-                    if(p) {
+                    if (p) {
                         // console.log("ADJUSTED BALL");
                         ball.move();
                         return true;
