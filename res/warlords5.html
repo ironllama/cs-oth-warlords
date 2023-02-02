@@ -13,8 +13,27 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: column;
             height: 100vh;
             font-family: 'Silkscreen', cursive;
+        }
+
+        #sysMessage {
+            height: 1.25em;
+            margin-bottom: 1.25em;
+            font-size: 1.25em;
+            color: firebrick;
+        }
+
+        #readyButton {
+            position: absolute;
+            background-color: firebrick;
+            color: antiquewhite;
+            font-size: 1.5em;
+            border-radius: 10px;
+            border: none;
+            outline: none;
+            padding: 10px;
         }
 
         .overlay {
@@ -38,21 +57,11 @@
         #nameInput {
             padding: 5px;
         }
-
-        #readyButton {
-            position: absolute;
-            background-color: firebrick;
-            color: antiquewhite;
-            font-size: 1.5em;
-            border-radius: 10px;
-            border: none;
-            outline: none;
-            padding: 10px;
-        }
     </style>
 </head>
 
 <body>
+    <div id="sysMessage"></div>
     <button id="readyButton">READY</button>
     <div id="overlay" class="overlay">
         <div class="dialog">
@@ -153,11 +162,11 @@
                     this.y = 0 + this.offset;
                 }
                 else if (pos == "NE") {
-                    this.x = canvas.wposth - this.offset;
+                    this.x = canvas.width - this.offset;
                     this.y = 0 + this.offset;
                 }
                 else if (pos == "SE") {
-                    this.x = canvas.wposth - this.offset;
+                    this.x = canvas.width - this.offset;
                     this.y = canvas.height - this.offset;
                 }
                 else if (pos == "SW") {
@@ -180,7 +189,9 @@
                 else if (this.position < this.thickness) this.position = this.thickness;
             }
 
-            draw() {
+            moveByPos(newPos) {
+                this.position = newPos;
+
                 let xPart, yPart;
 
                 if (this.position < this.offset) {
@@ -193,37 +204,29 @@
                 }
 
                 if (this.pos == "NW") {
-                    this.x = xPart;
-                    this.y = yPart;
-
-                    // Reverse the corner's movements.
-                    // this.x = yPart;
-                    // this.y = xPart;
+                    // this.x = xPart;
+                    // this.y = yPart;
+                    this.x = yPart;
+                    this.y = xPart;
                 }
                 else if (this.pos == "NE") {
-                    // this.x = canvas.width - xPart;
-                    // this.y = yPart;
-
-                    // Reverse the corner's movements.
-                    this.y = canvas.width - xPart;
-                    this.x = yPart;
+                    this.x = canvas.width - xPart;
+                    this.y = yPart;
                 }
                 else if (this.pos == "SE") {
-                    this.x = canvas.width - xPart;
-                    this.y = canvas.height - yPart;
-
-                    // Reverse the corner's movements.
-                    // this.x = canvas.width - yPart;
-                    // this.y = canvas.height - xPart;
+                    // this.x = canvas.width - xPart;
+                    // this.y = canvas.height - yPart;
+                    this.x = canvas.width - yPart;
+                    this.y = canvas.height - xPart;
                 }
                 else if (this.pos == "SW") {
-                    // this.x = xPart;
-                    // this.y = canvas.height - yPart;
-
-                    // Reverse the corner's movements.
-                    this.y = xPart;
-                    this.x = canvas.height - yPart;
+                    this.x = xPart;
+                    this.y = canvas.height - yPart;
                 }
+            }
+
+            draw() {
+                this.moveByPos(this.position);
 
                 let block = new Path2D();
                 block.rect(this.x - this.thickness, this.y - this.thickness, this.thickness * 2, this.thickness * 2)
@@ -466,7 +469,7 @@
         }
 
         readyButton.onclick = function () {
-            console.log("SENDING READY");
+            // console.log("SENDING READY");
             ws.sendMessage({ type: 'READY' });
             readyButton.style.backgroundColor = "limegreen";
         }
@@ -488,13 +491,14 @@
                 sysMessage.innerHTML = "No connection. Please refresh page to try again.";
             }
             ws.onmessage = function (inMessage) {
-                console.log("INCOMING: ", inMessage.data);
+                // console.log("INCOMING: ", inMessage.data);
                 let message = JSON.parse(inMessage.data);
 
                 if (message.type === 'ID') {
                     currPlayerId = message.id;
                 }
                 else if (message.type === 'MATCH') {
+                    console.log("MATCH: ", inMessage.data);
                     // All the names.
                     message.players.forEach(player => {
                         let newPlayer = new Player(player.id, player.idx, player.name);
@@ -504,13 +508,33 @@
                 }
                 else if (message.type === 'START') {
                     // next();
+                    readyButton.style.display = "none";
                 }
                 else if (message.type === 'MOVE') {
                     for (let player of allPlayers) {
-                        if (player.id === message.id) {
-                            player.shield.position = message.pos;
-                        }
+                        if (player.id === message.id) player.shield.position = message.pos;
                     }
+                }
+                else if (message.type === 'HITKING') {
+                    for (let player of allPlayers) {
+                        if (player.id === message.id) player.alive = false;
+                    }
+                }
+                else if (message.type === 'TICK') {
+                    if (message.state) {
+                        if (message.state.ballPos) {
+                            ball.x = message.state.ballPos.x;
+                            ball.y = message.state.ballPos.y;
+                        }
+                        // if (message.state.playerPos) {
+                        //     message.state.playerPos.forEach(player => {
+
+                        //     })
+                        // }
+                    }
+                }
+                else if (message.type === 'GAMEOVER') {
+                    console.log("GAME OVER");
                 }
             }
 

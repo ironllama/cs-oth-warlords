@@ -7,7 +7,7 @@ const wss = new WebSocketServer({
 });
 
 wss.on('connection', function connection(ws) {
-    if (wss.clients.size >= 4) {
+    if (wss.clients.size > 4) {
         console.log("FULL GAME. CLOSING CLIENT.");
         ws.send(JSON.stringify({
             type: 'ERROR',
@@ -68,6 +68,7 @@ wss.on('connection', function connection(ws) {
             // if (ws.opponent && ws.opponent !== "WAIT" && ws.opponent.ready) {
             //     ws.opponent.send(data.toString());
             // }
+            ws.player.shield.moveByPos(input.pos);
             wss.clients.forEach(client => client.send(JSON.stringify({ ...input, id: ws.clientId })));
         }
     });
@@ -100,14 +101,21 @@ function gameloop(wss) {
         let currPlayers = allPlayers.filter(player => player.alive);
         if (currPlayers.length === 1) {
             console.log("GAME OVER!");
+            wss.clients.forEach(client => client.send(JSON.stringify({ type: 'GAMEOVER' })));
             clearInterval(gamelooper);
             return;
         }
 
         ball.move();
-        currPlayers.forEach(player => player.checkCollisionBall(ball));
+        currPlayers.forEach(player => {
+            player.checkShieldCollisionBall(ball);
+            let kingHit = player.checkKingCollisionBall(ball);
+            if (kingHit) {
+                wss.clients.forEach(client => client.send(JSON.stringify({ type: 'HITKING', id: player.id })));
+            }
+        });
 
-        let playerPos = currPlayers.map(({ x, y, alive }) => ({ x, y, alive }));
+        let playerPos = currPlayers.map(({ id, name, shield, alive }) => ({ id, name, shield: { x: shield.x, y: shield.y }, alive }));
 
         wss.clients.forEach(client => client.send(JSON.stringify({
             type: 'TICK', state: {
@@ -127,7 +135,7 @@ function intersect(x1, y1, x2, y2, x3, y3, x4, y4) {
     // Check if none of the lines are of length 0
     if ((x1 === x2 && y1 === y2) || (x3 === x4 && y3 === y4)) { return false }
 
-    denominator = ((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1))
+    let denominator = ((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1))
 
     // Lines are parallel
     if (denominator === 0) { return false }
@@ -147,6 +155,9 @@ function intersect(x1, y1, x2, y2, x3, y3, x4, y4) {
 
 const playerColors = ['green', 'blue', 'red', 'goldenrod'];
 const playerPos = ['NW', 'SE', 'NE', 'SW'];
+
+const BALLSPEED = 10;
+const WALL_BOUNCE_RANDOMNESS = 0.5;
 
 class Player {
     // constructor(pos, color) {
@@ -176,11 +187,17 @@ class Player {
     //     }
     // }
 
-    checkCollisionBall(ball) {
+    checkShieldCollisionBall(ball) {
         if (this.alive) {
             this.shield.checkCollisionBall(ball);
-            let hitKing = this.king.checkCollisionBall(ball);
-            if (hitKing) this.alive = false;
+        }
+    }
+
+    checkKingCollisionBall(ball) {
+        if (this.alive) {
+            let kingHit = this.king.checkCollisionBall(ball);
+            if (kingHit) this.alive = false;
+            return kingHit;
         }
     }
 
@@ -210,11 +227,11 @@ class Square {
             this.y = 0 + this.offset;
         }
         else if (pos == "NE") {
-            this.x = canvas.wposth - this.offset;
+            this.x = canvas.width - this.offset;
             this.y = 0 + this.offset;
         }
         else if (pos == "SE") {
-            this.x = canvas.wposth - this.offset;
+            this.x = canvas.width - this.offset;
             this.y = canvas.height - this.offset;
         }
         else if (pos == "SW") {
@@ -231,10 +248,45 @@ class Square {
         // }
     }
 
-    move(evt) {
-        this.position += evt.movementX;
-        if (this.position > ((this.offset * 2) - this.thickness)) this.position = (this.offset * 2) - this.thickness;
-        else if (this.position < this.thickness) this.position = this.thickness;
+    // move(evt) {
+    //     this.position += evt.movementX;
+    //     if (this.position > ((this.offset * 2) - this.thickness)) this.position = (this.offset * 2) - this.thickness;
+    //     else if (this.position < this.thickness) this.position = this.thickness;
+    // }
+    moveByPos(newPos) {
+        this.position = newPos;
+
+        let xPart, yPart;
+
+        if (this.position < this.offset) {
+            xPart = this.position;
+            yPart = this.offset;
+        }
+        else {
+            xPart = this.offset;
+            yPart = this.offset - (this.position - this.offset);
+        }
+
+        if (this.pos == "NW") {
+            // this.x = xPart;
+            // this.y = yPart;
+            this.x = yPart;
+            this.y = xPart;
+        }
+        else if (this.pos == "NE") {
+            this.x = canvas.width - xPart;
+            this.y = yPart;
+        }
+        else if (this.pos == "SE") {
+            // this.x = canvas.width - xPart;
+            // this.y = canvas.height - yPart;
+            this.x = canvas.width - yPart;
+            this.y = canvas.height - xPart;
+        }
+        else if (this.pos == "SW") {
+            this.x = xPart;
+            this.y = canvas.height - yPart;
+        }
     }
 
     // draw() {
@@ -396,7 +448,8 @@ class Ball {
         this.prevX = this.x;
         this.prevY = this.y;
 
-        this.setSpeed(2, 3);
+        // this.setSpeed(2, 3);
+        this.setSpeed(Math.random() * BALLSPEED, Math.random() * BALLSPEED);
 
         this.color = color;
     }
@@ -432,10 +485,16 @@ class Ball {
 
     checkCollisionBoundary() {
         // If it hits the left or right wall.
-        if ((this.x - this.thickness) <= 0 || (this.x + this.thickness) >= canvas.width) this.setSpeed(this.dx * -1, this.dy);
+        if ((this.x - this.thickness) <= 0 || (this.x + this.thickness) >= canvas.width) {
+            let randomness = (Math.random() * (2 * WALL_BOUNCE_RANDOMNESS)) - WALL_BOUNCE_RANDOMNESS;
+            this.setSpeed(this.dx * -1 + randomness, this.dy);
+        }
 
         // If it hits the top or bottom wall.
-        if ((this.y - this.thickness) <= 0 || (this.y + this.thickness) >= canvas.height) this.setSpeed(this.dx, this.dy * -1);
+        if ((this.y - this.thickness) <= 0 || (this.y + this.thickness) >= canvas.height) {
+            let randomness = (Math.random() * (2 * WALL_BOUNCE_RANDOMNESS)) - WALL_BOUNCE_RANDOMNESS;
+            this.setSpeed(this.dx, this.dy * -1 + randomness);
+        }
     }
 }
 const ball = new Ball('white');
